@@ -1,12 +1,13 @@
+require('dotenv').config();
 const TelegramBot = require("node-telegram-bot-api")
 const port = process.env.PORT || 5000
 const host = "0.0.0.0"
 const externalUrl = process.env.CUSTOM_ENV_VARIABLE || "https://expense-tlg-bot.herokuapp.com/"
-const token = '1345286541:AAHQeS4U2uKlhbK9vaZjvBgcrIErENIEskY'
-var loginSF = "https://task3@scl.com/"
-var passwordSF = ""
-var jsforce = require("jsforce")
-var conn = new jsforce.Connection()
+const token = process.env.TOKEN;
+var loginSF = process.env.SF_USERNAME;
+var passwordSF = process.env.SF_PASSWORD;
+var jsforce = require("jsforce");
+var conn = new jsforce.Connection();
 
 var previousMessage;
 var changeMessageId;
@@ -24,7 +25,7 @@ var year = todayDay.getFullYear();
 
 var bot = new TelegramBot(token, { webHook: { port : port, host : host } });
 bot.setWebHook(externalUrl + ':5000/bot' + token);
-
+console.log(loginSF);
 bot.on("message", msg => {
     if (msg.text == "/start") {
         previousMessage = "";

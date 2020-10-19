@@ -7,8 +7,9 @@ const token = process.env.TOKEN;
 var loginSF = process.env.SF_USERNAME;
 var passwordSF = process.env.SF_PASSWORD;
 var jsforce = require("jsforce");
-var conn = new jsforce.Connection();
-
+var conn = new jsforce.Connection({
+    loginUrl : 'https://login.salesforce.com/'
+});
 var previousMessage;
 var changeMessageId;
 var contactId = "";
@@ -25,7 +26,7 @@ var year = todayDay.getFullYear();
 
 var bot = new TelegramBot(token, { webHook: { port : port, host : host } });
 bot.setWebHook(externalUrl + ':5000/bot' + token);
-console.log(loginSF);
+
 bot.on("message", msg => {
     if (msg.text == "/start") {
         previousMessage = "";
@@ -313,3 +314,12 @@ function getDate(answer) {
     dayToInsert = newDate;
     insertCard(newDate, chatId);
 }
+conn.login(loginSF, passwordSF, function(err, userInfo) {
+    if (err) { return console.error(err); }
+    console.log(conn.accessToken);
+    console.log(conn.instanceUrl);
+    // logged in user property
+    console.log("User ID: " + userInfo.id);
+    console.log("Org ID: " + userInfo.organizationId);
+    // ...
+});

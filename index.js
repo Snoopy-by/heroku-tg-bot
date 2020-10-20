@@ -7,7 +7,9 @@ const token = process.env.TOKEN;
 var loginSF = process.env.SF_USERNAME;
 var passwordSF = process.env.SF_PASSWORD;
 var jsforce = require("jsforce");
-var conn = new jsforce.Connection();
+var conn = new jsforce.Connection({
+    loginUrl: 'https://login.salesforce.com'
+});
 
 var previousMessage;
 var changeMessageId;

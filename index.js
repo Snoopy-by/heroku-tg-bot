@@ -1,7 +1,4 @@
-const Telegraf = require('telegraf');
 require('dotenv').config();
-const express = require('express');
-const expressApp = express();
 const TelegramBot = require("node-telegram-bot-api")
 const PORT = process.env.PORT || 500;
 const host = "0.0.0.0";
@@ -9,236 +6,315 @@ const externalUrl = process.env.CUSTOM_ENV_VARIABLE || "https://expense-tlg-bot.
 const token = process.env.TOKEN;
 var loginSF = process.env.SF_USERNAME;
 var passwordSF = process.env.SF_PASSWORD;
-
-const bot = new Telegraf(token);
-/*bot.telegram.deleteWebhook();
-bot.telegram.setWebhook(`${URL}/bot${API_TOKEN}`);*/
-expressApp.use(bot.webhookCallback(`/bot${token}`));
-
 var jsforce = require("jsforce");
-
-var Markup = require('telegraf/markup');
-const Calendar = require('telegraf-calendar-telegram');
-const WizardScene = require("telegraf/scenes/wizard");
-const Stage = require("telegraf/stage");
-const session = require("telegraf/session");
-const Composer = require('telegraf/composer');
-
-const calendar = new Calendar(bot, {
-    startWeekDay: 0,
-    weekDayNames: ["S", "M", "T", "W", "T", "F", "S"],
-    monthNames: [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-    ],
-    minDate: null,
-    maxDate: null
-});
-
 var conn = new jsforce.Connection({
-    LoginUrl: 'https://login.salesforce.com'
+    loginUrl: 'https://login.salesforce.com'
 });
 
-conn.login(loginSF,passwordSF, function(err, userInfo) {
-    if (err) { return console.error(err);
-        return ctx.reply(err);}
-    // Now you can get the access token and instance URL information.
-    // Save them to establish connection next time.
-    console.log(conn.accessToken);
-    console.log(conn.instanceUrl);
-    // logged in user property
-    console.log("User ID: " + userInfo.id);
-    console.log("Org ID: " + userInfo.organizationId);
-    // ...
-});
-var officeId = '';
-var selecteddate = new Date();
+var previousMessage;
+var changeMessageId;
+var contactId = "";
+var chatId;
+var amount;
+var description;
+var dayToInsert;
+var login;
 
-calendar.setDateListener((ctx, date) => {
-    selecteddate = date;
-    ctx.reply("Введите описание");
-});
+var todayDay = new Date();
+var month = todayDay.getMonth();
+var monthName;
+var year = todayDay.getFullYear();
 
-const stepHandler = new Composer();
-stepHandler.action("calendar", ctx => {
-
-    const today = new Date();
-    const minDate = new Date();
-    minDate.setMonth(today.getMonth() - 2);
-    const maxDate = new Date();
-    maxDate.setMonth(today.getMonth() + 2);
-    ctx.reply("Выберите дату", calendar.setMinDate(minDate).setMaxDate(maxDate).getCalendar());
-    return ctx.wizard.next();
-});
-stepHandler.action("today", ctx => {
-    ctx.wizard.state.datacard = new Date();
-    ctx.reply("Введите описание: ");
-    return ctx.wizard.next();
-});
-stepHandler.action("backFromscene", ctx => {
-    ctx.reply(
-        "Выберите действие",
-        Markup.inlineKeyboard([
-            Markup.callbackButton('Текущий баланс', 'balance'),
-            Markup.callbackButton('Создать карточку', "create")
-        ]).extra()
-    );
-    ctx.scene.leave();
-});
-
-const authentication = new WizardScene(
-    "authentication",
-    ctx => {
-        ctx.reply("Введите логин: ");
-        return ctx.wizard.next();
-    },
-    (ctx) => {
-        ctx.wizard.state.login = ctx.message.text;
-        ctx.reply("Введите пароль: ");
-        // Go to the following scene
-        return ctx.wizard.next();
-    },
-    ctx => {
-        ctx.wizard.state.password = ctx.message.text;
-        conn.sobject("Contact")
-            .find({
-                    'Email': ctx.wizard.state.login,
-                    'Password__c': ctx.wizard.state.password
-                },
-                {
-                    Id: 1,
-                    Name: 1,
-                    CreatedDate: 1,
-                    Admin__c: 1
-                })
-            .execute(function (err, records) {
-                if (err) {
-                    return console.error(err);
-                }
-                if (records.length == 0)
-                    return ctx.reply('Вход не выполнен! Проверьте логин или пароль!',
-                        Markup.inlineKeyboard([
-                            Markup.callbackButton('Повтор', 'replay')
-                        ]).extra());
-                if(records.length > 0 && records[0].Admin__c == true)
-                    return ctx.reply('Вход выполнен в качестве администратора. Пожалуйста, для создания карточки и просмотра баланса офиса зайдите под учетной записью работника офиса.',
-                        Markup.inlineKeyboard([
-                            Markup.callbackButton('Повтор', 'replay')
-                        ]).extra());
-
-                else {
-                    officeId = records[0].Id;
-                    ctx.reply('Авторизация прошла успешно!',
-                        Markup.inlineKeyboard([
-                            Markup.callbackButton('Текущий баланс', 'balance'),
-                            Markup.callbackButton('Создать карточку', "create")
-                        ]).extra()
-                    );
-                }
-
-            });
-        return ctx.scene.leave();
-    }
-);
-
-// Go back to menu after action
-bot.action("back", ctx => {
-    ctx.reply(
-        "Выберите действие",
-        Markup.inlineKeyboard([
-            Markup.callbackButton('Текущий баланс', 'balance'),
-            Markup.callbackButton('Создать карточку', "create")
-        ]).extra()
-    );
-});
-
-const expenseCreater = new WizardScene(
-    "expenseCreater",
-    stepHandler.use((ctx) => {
-        ctx.reply('На какой день желаете создать карточку? ',
-            Markup.inlineKeyboard([
-                Markup.callbackButton('Сегодня', 'today'),
-                Markup.callbackButton('Календарь', 'calendar'),
-                Markup.callbackButton('Отмена', 'backFromscene')
-            ]).extra()
-        );
-    }),
-    stepHandler,
-    ctx => {
-        ctx.wizard.state.datacard = selecteddate;
-        ctx.wizard.state.description = ctx.message.text;
-        ctx.reply("Введите стоимость: ");
-        return ctx.wizard.next();
-    },
-    ctx => {
-        conn.sobject("Expense_Card__c").create(
-            { Description__c : ctx.wizard.state.description,
-                Amount__c: ctx.message.text,
-                CardDate__c: ctx.wizard.state.datacard,
-                CardKeeper__c: officeId}
-            ,
-            function(err, rets) {
-                if (err) { return console.error(err); }
-                for (var i=0; i < rets.length; i++) {
-                    if (rets[i].success) {
-                        console.log("Created record id : " + rets[i].id);
-                    }
-                }
-                // ...
-            });
-        ctx.reply("Карточка успешно создана",
-            Markup.inlineKeyboard([
-                Markup.callbackButton('Выход', 'back')
-            ]).extra())
-        return ctx.scene.leave();
-    }
-);
-
-const stage = new Stage([authentication, expenseCreater]);
-bot.use(session());
-bot.use(stage.middleware());
-bot.action("create", Stage.enter("expenseCreater"));
-bot.start(Stage.enter("authentication"));
-bot.action("replay", Stage.enter("authentication"));
+var bot = new TelegramBot(token, { webHook: { port : PORT, host : host }});
+bot.setWebHook(externalUrl + ':500/bot' + token);
 
 
-bot.action('balance', ctx => {
-    const chatId = ctx.chat.id;
-    var sum = 0;
-    conn.sobject("Monthly_Expense__c")
-        .find( { 'Keeper__c': officeId},
-            { Id: 1,
-                Reminder__c: 1 })
-        .execute(function(err, records) {
-            if (err) { return console.error(err); }
-            else {
-                for (var i = 0; i < records.length; i++) {
-                    sum += records[i].Reminder__c;
-                }
-                return ctx.reply( 'Текущий баланс:' + sum + '$',
-                    Markup.inlineKeyboard([
-                        Markup.callbackButton('Создать карточку', "create")
-                    ]).extra());
+
+
+bot.on("message", msg => {
+    if (msg.text == "/start") {
+        previousMessage = "";
+        conn.login(loginSF, passwordSF, function(err, res) {
+            if (err) {
+                bot.sendMessage(msg.chat.id, "Ошибка авторизации в Salesforce");
+                return console.error(err);
+            } else {
+                bot
+                    .sendMessage(msg.chat.id, "Введите логин: ")
+                    .then((previousMessage = "login"));
             }
-        });
+        })
+    } else if (previousMessage == "login") {
+        login = msg.text;
+        bot
+            .sendMessage(msg.chat.id, "Введите пароль: ")
+            .then((previousMessage = "password"));
+    } else if (previousMessage == "password") {
+        var password = msg.text;
+        conn.query(
+            "SELECT Id, Name, Email FROM Contact " +
+            "WHERE Email = '" +
+            login +
+            "' " +
+            "AND Password__c = '" +
+            password +
+            "' " +
+            "LIMIT 1",
+            function(err, res) {
+                if (err) {
+                    return console.error("err", err);
+                }
+                console.log(res);
+                if (res.records.length == 0) {
+                    bot
+                        .sendMessage(msg.chat.id, "Неверный логин или пароль!")
+                        .then((previousMessage = ""));
+                    bot
+                        .sendMessage(msg.chat.id, "Введите логин: ")
+                        .then((previousMessage = "login"));
+                }
 
+                contactId = res.records[0].Id;
+                chatId = msg.chat.id;
+                bot
+                    .sendMessage(chatId, "Авторизация прошла успешно!")
+                    .then(mainMenu(chatId));
+            }
+        );
+    } else if (previousMessage == "amount") {
+        amount = msg.text;
+        const amountRegex = /^-?\d+\.?\d*$/;
+        if(amountRegex.test(amount) &&  amount > 0){
+            bot
+                .sendMessage(msg.chat.id, "Введите описание: ")
+                .then((previousMessage = "description"));
+        } else{
+            bot.sendMessage(msg.chat.id, "Неверный ввод. Введите сумму: ").then((previousMessage = "amount"));
+        }
+    } else if (previousMessage == "description") {
+        description = msg.text;
+        cardDate = dayToInsert;
+        conn.sobject("Expense_Card__c").create(
+            {
+                CardKeeper__c: contactId,
+                CardDate__c: cardDate,
+                Amount__c: amount,
+                Description__c: description
+            },
+            function(err, ret) {
+                if (err || !ret.success) {
+                    return console.error(err, ret);
+                }
+                bot
+                    .sendMessage(msg.chat.id, "Карточка успешно добавлена! ").then(previousMessage = '')
+                    .then(mainMenu(chatId));
+            }
+        );
+    } else if(msg.text == "/exit"){
+        console.log(previousMessage);
+        previousMessage = "";
+        bot.sendMessage(msg.chat.id, "Вы вышли из аккаунта.")
+            .then((previousMessage = "login"));
+    }
 });
 
-bot.catch((err) => {
-    console.log("Error in bot:", err);
+bot.on("callback_query", callbackQuery => {
+    var answer = callbackQuery.data;
+    if (answer == "new-card") {
+        const opts = {
+            reply_markup: JSON.stringify({
+                inline_keyboard: [
+                    [
+                        { text: "Сегодня", callback_data: "today" },
+                        { text: "Календарь", callback_data: "calendar" },
+                        { text: "Отмена", callback_data: "cancel" }
+                    ]
+                ]
+            })
+        };
+        bot.sendMessage(chatId, "На какой день желаете создать карточку?", opts);
+    } else if (answer == "balance") {
+        getBalance(chatId);
+    } else if (answer == "today") {
+        previousMessage = "today";
+        dayToInsert = todayDay;
+        insertCard(todayDay, chatId);
+    } else if (answer == "calendar") {
+        changeMonthName();
+        sendCalendar(chatId);
+    } else if (answer == "cancel") {
+        mainMenu(chatId);
+    } else if (answer == "<") {
+        changeMessageId = callbackQuery.message.message_id;
+        previousMonth();
+    } else if (answer == ">") {
+        changeMessageId = callbackQuery.message.message_id;
+        nextMonth();
+    } else if (answer >= 1 && answer <= 31) {
+        getDate(answer);
+    }
 });
-bot.launch();
-expressApp.get('/', (req, res) => {
-    res.send('Telegram bot is active');
-});
-expressApp.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
 
+function mainMenu(chatId) {
+    const opts = {
+        reply_markup: JSON.stringify({
+            inline_keyboard: [
+                [
+                    { text: "Текущий баланс", callback_data: "balance" },
+                    { text: "Создать карточку", callback_data: "new-card" }
+                ]
+            ]
+        })
+    };
+    bot.sendMessage(chatId, "Выберете действие: ", opts).then(previousMessage = '');
+}
 
+function getBalance(chatId) {
+    conn.query(
+        "SELECT Reminder__c FROM Monthly_Expense__c " +
+        "WHERE Keeper__c = '" +
+        contactId +
+        "'",
+        function(err, res) {
+            if (err) {
+                bot.sendMessage(msg.chat.id, "Query error ");
+                return console.error("err", err);
+            }
+            var balance = 0;
+            for (var i = 0; i < res.records.length; i++) {
+                balance += res.records[i].Reminder__c;
+            }
+            balance = (Math.round(balance * 100) / 100).toFixed(2);
+            bot.sendMessage(chatId, "Ваш баланс: " + balance + "$").then(previousMessage = '');
+        }
+    );
+}
 
+function insertCard(cardDate, chatId) {
+    bot.sendMessage(chatId, "Введите сумму: ").then((previousMessage = "amount"));
+}
 
+function changeMonthName() {
+    const monthNames = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sept",
+        "Oct",
+        "Nov",
+        "Dec"
+    ];
+    monthName = monthNames[month];
+}
 
+function sendCalendar(chatId) {
+    var inlineCalendar = showCalendar();
+    const opts = {
+        reply_markup: JSON.stringify({
+            inline_keyboard: inlineCalendar
+        })
+    };
+    bot.sendMessage(chatId, "Выберете дату: ", opts).then(previousMessage = '');
+}
 
+function showCalendar() {
+    var numOfdays = getDays();
+    var inlineCalendar = [];
 
+    var topRow = [];
 
+    var buttonLeft = new Object();
+    buttonLeft.text = "<";
+    buttonLeft.callback_data = "<";
+    topRow.push(buttonLeft);
+
+    var buttonYear = new Object();
+    buttonYear.text = monthName + " " + year;
+    buttonYear.callback_data = year;
+    topRow.push(buttonYear);
+
+    var buttonRight = new Object();
+    buttonRight.text = ">";
+    buttonRight.callback_data = ">";
+    topRow.push(buttonRight);
+
+    inlineCalendar.push(topRow);
+
+    var row = [];
+    for (var i = 1; i <= numOfdays; i++) {
+        if (i % 7 == 0) {
+            inlineCalendar.push(row);
+            row = [];
+        }
+
+        var button = new Object();
+        button.text = i.toString();
+        button.callback_data = i;
+        row.push(button);
+    }
+    inlineCalendar.push(row);
+    return inlineCalendar;
+}
+
+function getDays() {
+    var numberOfMonths = 0;
+
+    if (month == 3 || month == 5 || month == 8 || month == 10) {
+        numberOfMonths = 30;
+    } else if (month == 1) {
+        numberOfMonths = 28;
+    } else {
+        numberOfMonths = 31;
+    }
+
+    return numberOfMonths;
+}
+
+function previousMonth() {
+    if (month == 0) {
+        month = 11;
+        year -= 1;
+    } else {
+        month -= 1;
+    }
+    changeMonthName();
+    changeCalendar();
+}
+
+function changeCalendar() {
+    var inlineCalendar = showCalendar();
+
+    const opts = {
+        chat_id: chatId,
+        message_id: changeMessageId
+    };
+
+    bot.editMessageReplyMarkup(
+        {
+            inline_keyboard: inlineCalendar
+        },
+        opts
+    );
+}
+
+function nextMonth() {
+    if (month == 11) {
+        month = 0;
+        year += 1;
+    } else {
+        month += 1;
+    }
+    changeMonthName();
+    changeCalendar();
+}
+
+function getDate(answer) {
+    var newDate = new Date(year, month, answer, 3);
+    dayToInsert = newDate;
+    insertCard(newDate, chatId);
+}

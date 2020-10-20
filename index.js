@@ -1,13 +1,14 @@
 require('dotenv').config();
 const TelegramBot = require("node-telegram-bot-api")
+const PORT = process.env.PORT || 500;
+const host = "0.0.0.0";
 const externalUrl = process.env.CUSTOM_ENV_VARIABLE || "https://expense-tlg-bot.herokuapp.com/"
 const token = process.env.TOKEN;
 var loginSF = process.env.SF_USERNAME;
 var passwordSF = process.env.SF_PASSWORD;
 var jsforce = require("jsforce");
-var conn = new jsforce.Connection({
-    loginUrl : 'https://login.salesforce.com/'
-});
+var conn = new jsforce.Connection();
+
 var previousMessage;
 var changeMessageId;
 var contactId = "";
@@ -22,8 +23,9 @@ var month = todayDay.getMonth();
 var monthName;
 var year = todayDay.getFullYear();
 
-var bot = new TelegramBot(token, { polling: true});
-bot.setWebHook(externalUrl + ':5000/bot' + token);
+var bot = new TelegramBot(token, { webHook: { port : PORT, host : host }});
+bot.setWebHook(externalUrl + ':500/bot' + token);
+
 
 
 

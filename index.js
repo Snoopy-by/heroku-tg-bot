@@ -1,8 +1,8 @@
 require('dotenv').config();
 const TelegramBot = require("node-telegram-bot-api")
-const PORT = process.env.PORT || 500;
+const PORT = process.env.PORT || 8443;
 const host = "0.0.0.0";
-const externalUrl = process.env.CUSTOM_ENV_VARIABLE || "https://expense-tlg-bot.herokuapp.com/"
+const externalUrl = process.env.CUSTOM_ENV_VARIABLE || "https://api.telegram.org/"
 const token = process.env.TOKEN;
 var loginSF = process.env.SF_USERNAME;
 var passwordSF = process.env.SF_PASSWORD;
@@ -26,11 +26,8 @@ var monthName;
 var year = todayDay.getFullYear();
 
 var bot = new TelegramBot(token, { webHook: { port : PORT, host : host }});
-bot.setWebHook(externalUrl + ':500/bot' + token);
-
-
-
-
+bot.setWebHook(externalUrl + ':8443/bot' + token);
+console.log("Hello")
 bot.on("message", msg => {
     if (msg.text == "/start") {
         previousMessage = "";
@@ -318,3 +315,4 @@ function getDate(answer) {
     dayToInsert = newDate;
     insertCard(newDate, chatId);
 }
+
